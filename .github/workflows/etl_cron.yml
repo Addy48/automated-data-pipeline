@@ -2,7 +2,7 @@ name: Nightly ETL Pipeline
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # Runs at 02:00 UTC daily
+    - cron: '30 12 * * *'  # Runs at 12:30 UTC (18:00 IST) daily
   workflow_dispatch:      # Allows manual trigger
 
 jobs:

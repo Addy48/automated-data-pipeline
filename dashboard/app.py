@@ -32,7 +32,7 @@ def load_data():
 
 def main():
     st.title("📈 12-Month Sector-Growth Trends Dashboard")
-    st.markdown("This dashboard visualizes data extracted by our Automated ETL Pipeline, processing **50,000+** records from Yahoo Finance.")
+    st.markdown("This dashboard visualizes data extracted by our Automated ETL Pipeline, processing **Nifty 50** records from the Indian Stock Exchange using Yahoo Finance.")
     
     df = load_data()
     

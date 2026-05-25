@@ -9,11 +9,11 @@ from pathlib import Path
 logger = logging.getLogger("sp500_pipeline")
 
 
-def get_sp500_tickers(
-    fallback_path: str = "tests/fixtures/mock_sp500.csv",
+def get_nifty50_tickers(
+    fallback_path: str = "tests/fixtures/mock_nifty50.csv",
 ) -> pd.DataFrame:
     """
-    Scrape the S&P 500 constituency list from Wikipedia.
+    Scrape the Nifty 50 constituency list from Wikipedia.
 
     Args:
         fallback_path (str): Path to local CSV if Wikipedia is unreachable.
@@ -21,7 +21,7 @@ def get_sp500_tickers(
     Returns:
         pd.DataFrame: DataFrame containing 'Symbol' and 'GICS Sector' columns.
     """
-    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    url = "https://en.wikipedia.org/wiki/NIFTY_50"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) DataPipeline/1.0"
     }
@@ -30,13 +30,33 @@ def get_sp500_tickers(
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
 
-        # Read the first table on the page
+        # Read the second table on the Nifty 50 page (the first is usually the index info, the second is constituents)
         tables = pd.read_html(response.text)
-        df = tables[0]
+        # Often the constituents are in the 3rd table (index 2), let's find the one with 'Symbol'
+        df = None
+        for table in tables:
+            if "Symbol" in table.columns:
+                df = table
+                break
+                
+        if df is None:
+            raise ValueError("Could not find a table with 'Symbol' column on Wikipedia page.")
 
-        # Wikipedia sometimes uses dots instead of hyphens for class shares (e.g. BRK.B instead of BRK-B)
-        # yfinance expects hyphens
-        df["Symbol"] = df["Symbol"].str.replace(".", "-", regex=False)
+        # Wikipedia symbols don't have .NS suffix required by yfinance for Indian stocks
+        df["Symbol"] = df["Symbol"].astype(str) + ".NS"
+        
+        # Rename 'Sector' to 'GICS Sector' to match downstream validation schemas
+        if "Sector" in df.columns:
+            df = df.rename(columns={"Sector": "GICS Sector"})
+        else:
+            df["GICS Sector"] = "Unknown"
+            
+        # Ensure Security column exists (some wikipedia versions use Company Name)
+        if "Company Name" in df.columns:
+            df = df.rename(columns={"Company Name": "Security"})
+        elif "Security" not in df.columns:
+            df["Security"] = df["Symbol"]
+
         logger.info(f"Successfully scraped {len(df)} tickers from Wikipedia.")
         return df[["Symbol", "GICS Sector", "Security"]]
 
@@ -46,7 +66,6 @@ def get_sp500_tickers(
         )
         try:
             df = pd.read_csv(fallback_path)
-            df["Symbol"] = df["Symbol"].str.replace(".", "-", regex=False)
             logger.info(f"Successfully loaded {len(df)} tickers from fallback CSV.")
             return df[["Symbol", "GICS Sector", "Security"]]
         except Exception as fallback_err:

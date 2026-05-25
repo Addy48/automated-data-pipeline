@@ -5,13 +5,13 @@ from datetime import datetime
 from typing import Dict, Any
 
 from src.config import S3_PATHS
-from src.extract import get_sp500_tickers, fetch_ohlcv
+from src.extract import get_nifty50_tickers, fetch_ohlcv
 from src.transform import validate_raw, clean_data, engineer_features, validate_analytics
 from src.load import upload_bronze, upload_silver, upload_gold, upload_metrics
 
 # Initialize logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("sp500_pipeline")
+logger = logging.getLogger("market_pipeline")
 
 def main():
     logger.info("=" * 50)
@@ -45,7 +45,7 @@ def main():
     try:
         # 1. EXTRACT
         logger.info("\n--- PHASE 1: EXTRACT ---")
-        tickers_df = get_sp500_tickers()
+        tickers_df = get_nifty50_tickers()
         if tickers_df.empty:
             raise ValueError("Failed to extract tickers.")
             
@@ -61,6 +61,7 @@ def main():
             
         # Join with sectors
         raw_merged = raw_ohlcv.merge(tickers_df[['Symbol', 'GICS Sector']], on='Symbol', how='left')
+        raw_merged = raw_merged.rename(columns={'GICS Sector': 'GICS_Sector'})
         
         # 2. BRONZE GATE & LOAD
         logger.info("\n--- PHASE 2: BRONZE GATE ---")

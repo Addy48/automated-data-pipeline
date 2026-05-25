@@ -10,15 +10,17 @@ for symbol in symbols:
     for i, date in enumerate(dates):
         # Add some random walk
         price = base_price + np.random.normal(0, 1) + (i * 0.1)
-        rows.append({
-            "Date": date.date(),
-            "Symbol": symbol,
-            "Open": price,
-            "High": price + 2.0,
-            "Low": price - 2.0,
-            "Close": price + 0.5,
-            "Volume": 1000 + (i * 10)
-        })
+        rows.append(
+            {
+                "Date": date.date(),
+                "Symbol": symbol,
+                "Open": price,
+                "High": price + 2.0,
+                "Low": price - 2.0,
+                "Close": price + 0.5,
+                "Volume": 1000 + (i * 10),
+            }
+        )
 
 df = pd.DataFrame(rows)
 df.to_parquet("tests/fixtures/mock_ohlcv.parquet", engine="pyarrow")
