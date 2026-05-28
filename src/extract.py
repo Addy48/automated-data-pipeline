@@ -6,7 +6,7 @@ import yfinance as yf
 from typing import Optional, List
 from pathlib import Path
 
-logger = logging.getLogger("sp500_pipeline")
+logger = logging.getLogger("market_pipeline")
 
 
 def get_nifty50_tickers(
@@ -58,7 +58,8 @@ def get_nifty50_tickers(
             df["Security"] = df["Symbol"]
 
         logger.info(f"Successfully scraped {len(df)} tickers from Wikipedia.")
-        return df[["Symbol", "GICS Sector", "Security"]]
+        df["Exchange"] = "Nifty 50"
+        return df[["Symbol", "GICS Sector", "Security", "Exchange"]]
 
     except Exception as e:
         logger.error(
@@ -67,7 +68,60 @@ def get_nifty50_tickers(
         try:
             df = pd.read_csv(fallback_path)
             logger.info(f"Successfully loaded {len(df)} tickers from fallback CSV.")
-            return df[["Symbol", "GICS Sector", "Security"]]
+            df["Exchange"] = "Nifty 50"
+            return df[["Symbol", "GICS Sector", "Security", "Exchange"]]
+        except Exception as fallback_err:
+            logger.critical(f"Fallback also failed: {fallback_err}")
+            raise
+
+
+def get_sp500_tickers(
+    fallback_path: str = "tests/fixtures/mock_sp500.csv",
+) -> pd.DataFrame:
+    """
+    Scrape the S&P 500 constituency list from Wikipedia.
+
+    Args:
+        fallback_path (str): Path to local CSV if Wikipedia is unreachable.
+
+    Returns:
+        pd.DataFrame: DataFrame containing 'Symbol', 'GICS Sector', 'Security', and 'Exchange' columns.
+    """
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) DataPipeline/1.0"
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        tables = pd.read_html(response.text)
+        df = tables[0]
+
+        # Standardize columns to match downstream schemas
+        if "Symbol" not in df.columns and "Ticker" in df.columns:
+            df = df.rename(columns={"Ticker": "Symbol"})
+
+        if "Security" not in df.columns:
+            df["Security"] = df["Symbol"]
+
+        # Handle edge cases where symbols contain dots instead of dashes (e.g. BRK.B -> BRK-B for yfinance)
+        df["Symbol"] = df["Symbol"].str.replace(".", "-", regex=False)
+
+        logger.info(f"Successfully scraped {len(df)} S&P 500 tickers from Wikipedia.")
+        df["Exchange"] = "S&P 500"
+        return df[["Symbol", "GICS Sector", "Security", "Exchange"]]
+
+    except Exception as e:
+        logger.error(
+            f"Failed to scrape S&P 500 Wikipedia: {e}. Falling back to {fallback_path}."
+        )
+        try:
+            df = pd.read_csv(fallback_path)
+            logger.info(f"Successfully loaded {len(df)} S&P 500 tickers from fallback CSV.")
+            df["Exchange"] = "S&P 500"
+            return df[["Symbol", "GICS Sector", "Security", "Exchange"]]
         except Exception as fallback_err:
             logger.critical(f"Fallback also failed: {fallback_err}")
             raise

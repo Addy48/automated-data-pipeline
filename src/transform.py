@@ -11,6 +11,7 @@ logger = logging.getLogger("sp500_pipeline")
 # ---------------------------------------------------------
 class RawDataSchema(pa.DataFrameModel):
     Symbol: Series[str] = pa.Field(nullable=False)
+    Exchange: Series[str] = pa.Field(nullable=False)
     Date: Series[pd.Timestamp] = pa.Field(nullable=False)
     Open: Series[float] = pa.Field(nullable=True)
     High: Series[float] = pa.Field(nullable=True)
@@ -30,6 +31,7 @@ class RawDataSchema(pa.DataFrameModel):
 # ---------------------------------------------------------
 class AnalyticsDataSchema(pa.DataFrameModel):
     Symbol: Series[str] = pa.Field(nullable=False)
+    Exchange: Series[str] = pa.Field(nullable=False)
     Date: Series[pd.Timestamp] = pa.Field(nullable=False)
     Close: Series[float] = pa.Field(gt=0, nullable=False)
     Volume: Series[float] = pa.Field(ge=0, nullable=False)
@@ -46,15 +48,16 @@ class AnalyticsDataSchema(pa.DataFrameModel):
         strict = False
 
 
-def flatten_and_merge(ohlcv_df: pd.DataFrame, sp500_df: pd.DataFrame) -> pd.DataFrame:
-    """Merge OHLCV data with S&P 500 sector metadata."""
-    if ohlcv_df.empty or sp500_df.empty:
+def flatten_and_merge(ohlcv_df: pd.DataFrame, tickers_df: pd.DataFrame) -> pd.DataFrame:
+    """Merge OHLCV data with sector and exchange metadata."""
+    if ohlcv_df.empty or tickers_df.empty:
         logger.warning("Empty dataframe passed to flatten_and_merge.")
         return pd.DataFrame()
         
-    merged_df = ohlcv_df.merge(sp500_df, on='Symbol', how='left')
-    merged_df = merged_df.rename(columns={'GICS Sector': 'GICS_Sector'})
-    logger.info(f"Merged OHLCV with S&P 500 metadata. Shape: {merged_df.shape}")
+    merged_df = ohlcv_df.merge(tickers_df, on='Symbol', how='left')
+    if 'GICS Sector' in merged_df.columns:
+        merged_df = merged_df.rename(columns={'GICS Sector': 'GICS_Sector'})
+    logger.info(f"Merged OHLCV with metadata. Shape: {merged_df.shape}")
     return merged_df
 
 
@@ -88,8 +91,8 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
         
     df = df.copy()
     
-    # Drop rows where critical price data is missing
-    df = df.dropna(subset=['Close', 'Volume', 'GICS_Sector'])
+    # Drop rows where critical price data or metadata is missing
+    df = df.dropna(subset=['Close', 'Volume', 'GICS_Sector', 'Exchange'])
     
     # Assert physical reality
     df = df[df['Close'] > 0]

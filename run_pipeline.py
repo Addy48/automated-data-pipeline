@@ -5,8 +5,8 @@ from datetime import datetime
 from typing import Dict, Any
 
 from src.config import S3_PATHS
-from src.extract import get_nifty50_tickers, fetch_ohlcv
-from src.transform import validate_raw, clean_data, engineer_features, validate_analytics
+from src.extract import get_nifty50_tickers, get_sp500_tickers, fetch_ohlcv
+from src.transform import validate_raw, clean_data, engineer_features, validate_analytics, flatten_and_merge
 from src.load import upload_bronze, upload_silver, upload_gold, upload_metrics
 
 # Initialize logger
@@ -45,23 +45,30 @@ def main():
     try:
         # 1. EXTRACT
         logger.info("\n--- PHASE 1: EXTRACT ---")
-        tickers_df = get_nifty50_tickers()
+        import pandas as pd
+        
+        logger.info("Extracting Nifty 50 tickers...")
+        nifty_df = get_nifty50_tickers()
+        logger.info("Extracting S&P 500 tickers...")
+        sp500_df = get_sp500_tickers()
+        
+        tickers_df = pd.concat([nifty_df, sp500_df], ignore_index=True)
+        
         if tickers_df.empty:
-            raise ValueError("Failed to extract tickers.")
+            raise ValueError("Failed to extract tickers from both sources.")
             
         tickers_list = tickers_df['Symbol'].tolist()
-        logger.info(f"Extracting OHLCV for {len(tickers_list)} tickers...")
+        logger.info(f"Extracting OHLCV for {len(tickers_list)} combined tickers...")
         
-        # In a real run, this fetches all. We take top 50 for speed if not production
+        # In a real run, this fetches all. We take top combined for speed if not production
         raw_ohlcv = fetch_ohlcv(tickers_list, period='1mo')
         metrics["records_extracted"] = len(raw_ohlcv)
         
         if raw_ohlcv.empty:
             raise ValueError("No OHLCV data extracted.")
             
-        # Join with sectors
-        raw_merged = raw_ohlcv.merge(tickers_df[['Symbol', 'GICS Sector']], on='Symbol', how='left')
-        raw_merged = raw_merged.rename(columns={'GICS Sector': 'GICS_Sector'})
+        # Join with metadata (Sector and Exchange)
+        raw_merged = flatten_and_merge(raw_ohlcv, tickers_df[['Symbol', 'GICS Sector', 'Exchange']])
         
         # 2. BRONZE GATE & LOAD
         logger.info("\n--- PHASE 2: BRONZE GATE ---")

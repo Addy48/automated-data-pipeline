@@ -32,7 +32,7 @@ def load_data():
 
 def main():
     st.title("📈 12-Month Sector-Growth Trends Dashboard")
-    st.markdown("This dashboard visualizes data extracted by our Automated ETL Pipeline, processing **Nifty 50** records from the Indian Stock Exchange using Yahoo Finance.")
+    st.markdown("This dashboard visualizes data extracted by our Automated ETL Pipeline, processing records from **Nifty 50** and **S&P 500** using Yahoo Finance.")
     
     df = load_data()
     
@@ -41,13 +41,17 @@ def main():
         return
         
     # Render Sidebar
-    selected_sector = render_sidebar(df)
+    selected_exchange, selected_sector = render_sidebar(df)
+    
+    # Filter df by exchange if necessary
+    if selected_exchange and 'Exchange' in df.columns:
+        df = df[df['Exchange'] == selected_exchange]
+        
+    # Filter chart_df by sector if necessary
+    chart_df = df if not selected_sector else df[df['GICS Sector'] == selected_sector]
     
     # Render KPI Cards
     render_kpi_cards(df)
-    
-    # Filter df by sector if necessary
-    chart_df = df if not selected_sector else df[df['GICS Sector'] == selected_sector]
     
     # Render Charts
     render_sector_growth_chart(chart_df)
