@@ -7,6 +7,7 @@ import pandera as pa
 def valid_raw_data():
     return pd.DataFrame({
         'Symbol': ['AAPL'],
+        'Exchange': ['S&P 500'],
         'Date': [pd.Timestamp('2023-01-01')],
         'Open': [100.0],
         'High': [105.0],
@@ -36,6 +37,7 @@ def test_raw_schema_valid(valid_raw_data):
 def test_raw_schema_invalid():
     invalid_data = pd.DataFrame({
         'Symbol': [None, 'AAPL'], # Null symbol should fail
+        'Exchange': [None, 'S&P 500'], # Null exchange should fail
         'Date': [pd.Timestamp('2023-01-01'), 'not-a-date'], # Bad date type
     })
     validated, failed = validate_raw(invalid_data)

@@ -2,22 +2,162 @@ import os
 import sys
 import streamlit as st
 import pandas as pd
+import subprocess
 
 # Add the parent directory to sys.path so we can import components
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from components.kpi_cards import render_kpi_cards
 from components.charts import render_sector_growth_chart, render_top_performers
-from components.sidebar import render_sidebar
 
 # Define the local data path
 DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'sector_growth_data.parquet')
 
 st.set_page_config(
-    page_title="Automated Data Pipeline & Dashboard",
+    page_title="AIIMIN Market Intelligence | The Arena.",
     page_icon="📈",
     layout="wide"
 )
+
+# Custom premium CSS styling matching 'The Arena'
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap');
+
+/* Main application background and font */
+.stApp {
+    background-color: #F4F3EF !important;
+    font-family: 'Outfit', sans-serif !important;
+    color: #1c1a17 !important;
+}
+
+/* Hide Streamlit default sidebar and collapse button */
+[data-testid="collapsedControl"] {
+    display: none !important;
+}
+section[data-testid="stSidebar"] {
+    display: none !important;
+}
+div.stSidebarCollapseButton {
+    display: none !important;
+}
+
+/* Custom Headers */
+.arena-tag {
+    font-size: 11px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 2px !important;
+    color: #1a4329 !important;
+    font-weight: 700 !important;
+    margin-bottom: 2px !important;
+}
+
+.arena-title {
+    font-family: 'Playfair Display', serif !important;
+    font-size: 52px !important;
+    font-weight: 700 !important;
+    color: #1c1a17 !important;
+    margin-bottom: 25px !important;
+    line-height: 1.1 !important;
+}
+
+/* Radio buttons container (Toggling Exchanges) */
+div[role="radiogroup"] {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 12px !important;
+    margin-bottom: 30px !important;
+    flex-wrap: wrap !important;
+}
+
+/* Radio items (Pills) */
+div[role="radiogroup"] label {
+    background-color: #ffffff !important;
+    border: 1px solid #e1e0db !important;
+    border-radius: 24px !important;
+    padding: 10px 24px !important;
+    color: #1c1a17 !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+div[role="radiogroup"] label:hover {
+    border-color: #1a4329 !important;
+    color: #1a4329 !important;
+}
+
+/* Selected state styling */
+div[role="radiogroup"] label[data-baseweb="radio"] div:first-child {
+    display: none !important;
+}
+
+div[role="radiogroup"] label:has(input:checked) {
+    background-color: #1a4329 !important;
+    color: #ffffff !important;
+    border-color: #1a4329 !important;
+}
+
+div[role="radiogroup"] label:has(input:checked) * {
+    color: #ffffff !important;
+}
+
+div[role="radiogroup"] label span {
+    display: none !important;
+}
+
+/* Custom styled headers for sections */
+h3 {
+    font-family: 'Playfair Display', serif !important;
+    font-size: 28px !important;
+    font-weight: 700 !important;
+    color: #1c1a17 !important;
+    margin-top: 30px !important;
+    margin-bottom: 15px !important;
+}
+
+/* Line Chart container */
+div[data-testid="stLineChart"] {
+    background: #ffffff !important;
+    border-radius: 18px !important;
+    border: 1px solid #e1e0db !important;
+    padding: 20px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02) !important;
+}
+
+/* Sync feed styling */
+.live-status {
+    display: inline-flex;
+    align-items: center;
+    background: #e2f0d9;
+    color: #385723;
+    font-size: 12px;
+    font-weight: bold;
+    border-radius: 20px;
+    padding: 6px 14px;
+    margin-right: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.live-status::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background-color: #385723;
+    border-radius: 50px;
+    margin-right: 8px;
+    animation: blinker 1.5s linear infinite;
+}
+
+@keyframes blinker {
+    50% { opacity: 0; }
+}
+</style>
+""", unsafe_allow_html=True)
 
 @st.cache_data
 def load_data():
@@ -31,41 +171,72 @@ def load_data():
         return pd.DataFrame()
 
 def main():
-    st.title("📈 12-Month Sector-Growth Trends Dashboard")
-    st.markdown("This dashboard visualizes data extracted by our Automated ETL Pipeline, processing records from **Nifty 50** and **S&P 500** using Yahoo Finance.")
-    
+    # 1. HEADER ROW (Title & Actions)
+    col_left, col_right = st.columns([7, 3])
+    with col_left:
+        st.markdown('<div class="arena-tag">AIIMIN MARKET INTELLIGENCE</div>', unsafe_allow_html=True)
+        st.markdown('<div class="arena-title">The Arena.</div>', unsafe_allow_html=True)
+    with col_right:
+        st.markdown('<div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 15px;">', unsafe_allow_html=True)
+        # Render a Live Status Tag
+        st.markdown('<div class="live-status">Live Market Feed</div>', unsafe_allow_html=True)
+        # Render Sync Scores Button
+        if st.button("🔄 Sync Markets", key="sync_btn"):
+            with st.spinner("Executing ETL Pipeline (Scraping Wikipedia + yfinance)..."):
+                try:
+                    # Execute the ETL pipeline
+                    result = subprocess.run([sys.executable, "run_pipeline.py"], capture_output=True, text=True, check=True)
+                    st.cache_data.clear() # Clear cache so new data is loaded
+                    st.success("ETL Pipeline completed successfully! Rerunning...")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"ETL pipeline run failed: {e}")
+        st.markdown('</div>', unsafe_allow_html=True)
+
     df = load_data()
     
     if df.empty:
-        st.warning("No data found! Please run `python run_pipeline.py` first to generate the dataset.")
+        st.warning("No market data found! Please click the '🔄 Sync Markets' button on the top right to execute the ETL pipeline and pull latest exchange data.")
         return
         
-    # Render Sidebar
-    selected_exchange, selected_sector = render_sidebar(df)
-    
+    # 2. FILTER ROW (Exchange Selector styled as horizontal radio pills)
+    exchanges = ["🌐 All Markets"]
+    if 'Exchange' in df.columns:
+        exchanges.extend(sorted(df['Exchange'].dropna().unique().tolist()))
+        
+    selected_exchange_opt = st.radio("Exchange", exchanges, label_visibility="collapsed")
+    selected_exchange = None if selected_exchange_opt == "🌐 All Markets" else selected_exchange_opt
+
     # Filter df by exchange if necessary
     if selected_exchange and 'Exchange' in df.columns:
-        df = df[df['Exchange'] == selected_exchange]
-        
-    # Filter chart_df by sector if necessary
-    chart_df = df if not selected_sector else df[df['GICS Sector'] == selected_sector]
-    
-    # Render KPI Cards
-    render_kpi_cards(df)
-    
-    # Render Charts
-    render_sector_growth_chart(chart_df)
-    
-    st.markdown("---")
-    
-    # Ensure selected_sector is passed to render_top_performers if it's set
-    if selected_sector:
-        render_top_performers(df, selected_sector)
+        df_filtered = df[df['Exchange'] == selected_exchange]
     else:
-        st.info("Select a specific sector from the sidebar to view top performing stocks.")
+        df_filtered = df.copy()
 
+    # 3. KPI SUMMARY CARDS
+    render_kpi_cards(df_filtered)
+    
+    # 4. CHART SECTION (Sector returns over time)
+    render_sector_growth_chart(df_filtered)
+    
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    
+    # 5. SECTOR-SPECIFIC TOP PERFORMERS GRID
     st.markdown("---")
-    st.caption("Built with Python, Pandas, Boto3, and Streamlit. Part of the Automated Data Pipeline Project.")
+    col_sec_title, col_sec_select = st.columns([6, 4])
+    with col_sec_title:
+        st.markdown("### Top Performing Industry Stocks")
+    with col_sec_select:
+        # Sector Filter (Selectbox styled cleanly)
+        sector_col = 'GICS_Sector' if 'GICS_Sector' in df_filtered.columns else 'GICS Sector'
+        sectors = sorted(df_filtered[sector_col].dropna().unique().tolist())
+        selected_sector = st.selectbox("Filter Industry Sector", sectors, label_visibility="collapsed")
+
+    # Render top stock cards for the selected sector
+    render_top_performers(df_filtered, selected_sector)
+
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
+    st.caption("AIIMIN Personal OS • Powered by Python, yfinance, Boto3, and Streamlit.")
 
 if __name__ == "__main__":
     main()

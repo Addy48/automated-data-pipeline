@@ -20,7 +20,8 @@ def sample_sp500():
     return pd.DataFrame({
         'Symbol': ['AAPL', 'MSFT'],
         'Security': ['Apple Inc.', 'Microsoft Corp.'],
-        'GICS Sector': ['Information Technology', 'Information Technology']
+        'GICS Sector': ['Information Technology', 'Information Technology'],
+        'Exchange': ['S&P 500', 'S&P 500']
     })
 
 def test_flatten_and_merge(sample_ohlcv, sample_sp500):

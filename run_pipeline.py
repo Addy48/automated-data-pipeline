@@ -77,6 +77,7 @@ def main():
         metrics["records_bronze"] = len(bronze_df)
         
         logger.info("Loading to Bronze Layer...")
+        bronze_df.to_parquet("data/raw_test_run.parquet", engine="pyarrow", index=False)
         if has_aws_creds:
             upload_bronze(bronze_df, aws_bucket, run_id)
         else:
@@ -88,6 +89,7 @@ def main():
         metrics["records_silver"] = len(silver_df)
         
         logger.info("Loading to Silver Layer...")
+        silver_df.to_parquet("data/processed_test_run.parquet", engine="pyarrow", index=False)
         if has_aws_creds:
             upload_silver(silver_df, aws_bucket, run_id)
         else:
@@ -102,6 +104,9 @@ def main():
         metrics["records_gold"] = len(gold_df)
         
         logger.info("Loading to Gold Layer...")
+        gold_df.to_parquet("data/analytics_test_run.parquet", engine="pyarrow", index=False)
+        gold_df.to_parquet("data/sector_growth_data.parquet", engine="pyarrow", index=False)
+        gold_df.to_csv("data/sector_growth_data.csv", index=False)
         if has_aws_creds:
             upload_gold(gold_df, aws_bucket, run_id)
         else:
