@@ -11,15 +11,15 @@ The project spans across three major platforms: **GitHub**, **AWS**, and your **
 ### A. GitHub (The Control Center & Automation Engine)
 Your entire codebase lives at: `https://github.com/Addy48/automated-data-pipeline`
 - **What happens here?** GitHub stores the code and runs the automation.
-- **Where to look:** Click on the **"Actions"** tab at the top of your GitHub repository. Here you will see the **"Nightly ETL Pipeline"**. This is the heart of the project. It automatically turns on every day, processes the market data, and sends it to AWS.
+- **Where to look:** Click on the **"Actions"** tab at the top of your GitHub repository. Here you will see the **"Nightly ETL Pipeline"**. This is the heart of the project. It automatically triggers twice daily (at 12:30 UTC and 21:30 UTC), processes the market data for both S&P 500 and Nifty 50, and uploads it to AWS.
 
 ### B. AWS Cloud (The Storage & Compute Engine)
 Go to [aws.amazon.com](https://aws.amazon.com) and log into your console. Search for the following services:
-- **Amazon S3**: Search for "S3". You will see a bucket named `sp500-pipeline-aaditya-2026-xyz`. Click it. Inside, you will see folders for `bronze`, `silver`, and `gold`. This is where your actual Parquet data files are being saved every night.
-- **Amazon Athena**: Search for "Athena". This is the query engine. If you go to the Query Editor, select the database `sp500_analytics`, you can literally type `SELECT * FROM gold_layer LIMIT 10;` and instantly see your pipeline's data.
+- **Amazon S3**: Search for "S3". You will see a bucket named `sp500-pipeline-aaditya-2026-xyz` (or your customized bucket name). Click it. Inside, you will see folders for `raw/` (Bronze), `processed/` (Silver), and `analytics/` (Gold). This is where your actual Parquet files are securely saved after each run.
+- **Amazon Athena**: Search for "Athena". This is the query engine. In the Query Editor, select the database `sp500_analytics`, where you can query the unified gold layer containing both US and Indian stock metrics.
 
 ### C. Your Local Machine (The Visualization Engine)
-Your Mac terminal is where you launch the beautiful, interactive Analytics Dashboard. The dashboard connects to AWS, pulls the insights, and displays them in your web browser.
+Your Mac terminal is where you launch the beautiful, interactive Analytics Dashboard ("The Arena"). The dashboard connects to AWS, pulls the insights, and displays them in your web browser.
 
 ---
 
@@ -40,15 +40,18 @@ You don't need to touch AWS or GitHub for this.
    ```bash
    streamlit run dashboard/app.py
    ```
-5. Your browser will automatically open a beautiful webpage. Use the sidebar on the left to filter by sectors, view the KPI cards, and interact with the charts!
+5. Your browser will automatically open a beautiful webpage styled like **The Arena**. 
+   - **Toggling Markets:** Use the horizontal selection pills at the top (`🌐 All Markets`, `🇮🇳 Nifty 50`, `🇺🇸 S&P 500`) to filter between US and Indian equities.
+   - **Filtering Sectors:** Use the GICS Sector dropdown inline in the main body to filter industry segments and view top performer cards dynamically.
 
-### Scenario 2: I want to manually trigger a data extraction right now.
-The pipeline runs automatically at 02:00 UTC. However, if you want to pull data *right now*:
-1. Go to your repository on GitHub (`Addy48/automated-data-pipeline`).
-2. Click the **"Actions"** tab.
-3. On the left sidebar, click **"Nightly ETL Pipeline"**.
-4. On the right side of the screen, click the **"Run workflow"** dropdown button, and click the green **"Run workflow"** button.
-5. Wait about 1-2 minutes. The pipeline will spin up, extract today's stock data, and upload it to AWS!
+### Scenario 2: I want to manually sync / trigger a data extraction right now.
+Although the pipeline runs automatically twice a day, you can trigger it manually:
+- **Directly from the Dashboard:** Click the **"🔄 Sync Markets"** button on the top right of the dashboard. It will spin up the ETL pipeline in a background process, re-extract Wikipedia and yfinance data, validate schemas, rewrite local Parquet files, and refresh the UI in-place!
+- **From GitHub Actions:** 
+  1. Go to your repository on GitHub (`Addy48/automated-data-pipeline`).
+  2. Click the **"Actions"** tab.
+  3. On the left sidebar, click **"Nightly ETL Pipeline"**.
+  4. Click the green **"Run workflow"** button on the right.
 
 ---
 
@@ -57,25 +60,21 @@ The pipeline runs automatically at 02:00 UTC. However, if you want to pull data 
 ### What if I want to change the schedule?
 If you want the pipeline to run at a different time:
 1. Open the file `.github/workflows/etl_cron.yml`.
-2. Look for the line: `- cron: '0 2 * * *'`
-3. This is standard Cron syntax. Change it to your desired time and push the code to GitHub.
+2. Look for the lines under `schedule:`:
+   ```yaml
+   - cron: '30 12,21 * * *'
+   ```
+3. Modify the cron expression to your desired UTC times and push to GitHub.
 
 ### What if AWS charges me money?
 The infrastructure is designed using serverless components (S3, Athena, Glue).
-- **S3** costs pennies per gigabyte. The stock data is compressed into Parquet, meaning it takes up mere kilobytes.
-- **Athena** charges $5 per Terabyte queried. You are querying megabytes.
-- Overall, this architecture falls entirely within the **AWS Free Tier** or will cost less than $0.10 a month.
-
-### Adding New Developers to the Project
-If someone else joins your team:
-1. Have them clone the repo from GitHub.
-2. Have them create their own `.env` file using `.env.example` as a template.
-3. Give them AWS IAM Read-Only credentials so they can run the dashboard locally.
+- **S3** costs pennies per gigabyte. The stock data is compressed into Parquet, taking up very little space.
+- **Athena** charges $5 per Terabyte queried. Since the dashboard queries only megabytes, execution costs fall entirely within the **AWS Free Tier** (or will cost less than $0.10 a month).
 
 ---
 
 ## 4. Troubleshooting
 
-- **Dashboard is failing to load data**: Ensure your `.env` file exists locally and has your `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
-- **GitHub Actions is failing**: Check the logs in the GitHub Actions tab. It is usually caused by Wikipedia changing its table structure or Yahoo Finance rate-limiting the IP. The code has robust error handling, but APIs can change!
-- **Terraform says state is locked**: If you ever run Terraform manually and it locks, simply go to your AWS console, or ensure no other terminal is currently running an apply. (You shouldn't need to run Terraform again, it is already deployed!)
+- **Dashboard is failing to load data**: Ensure you have executed `python run_pipeline.py` or clicked **"🔄 Sync Markets"** to generate the initial local parquet data files inside the `data/` folder.
+- **KeyError: 'Exchange' or Column Errors**: Ensure all your local files match the latest repository code. Run `git pull origin main` to synchronize.
+- **Yahoo Finance rate-limiting**: The extraction engine is resilient and retries downloads. If a download fails, check the `logs/` directory for detailed exception metrics.
