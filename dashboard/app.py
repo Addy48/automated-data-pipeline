@@ -8,7 +8,7 @@ import subprocess
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from components.kpi_cards import render_kpi_cards
-from components.charts import render_sector_growth_chart, render_top_performers
+from components.charts import render_sector_growth_chart, render_top_performers, render_ticker_explorer, render_pipeline_monitor
 
 # Define the local data path
 DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'sector_growth_data.parquet')
@@ -120,13 +120,42 @@ h3 {
     margin-bottom: 15px !important;
 }
 
-/* Line Chart container */
-div[data-testid="stLineChart"] {
+/* Line Chart & Bar Chart container */
+div[data-testid="stLineChart"], div[data-testid="stBarChart"] {
     background: #ffffff !important;
     border-radius: 18px !important;
     border: 1px solid #e1e0db !important;
     padding: 20px !important;
     box-shadow: 0 4px 12px rgba(0,0,0,0.02) !important;
+}
+
+/* Style the Tab List Container */
+div[data-baseweb="tab-list"] {
+    background-color: transparent !important;
+    gap: 10px !important;
+    border-bottom: 2px solid #e1e0db !important;
+    margin-bottom: 25px !important;
+}
+
+/* Style each Tab Button */
+div[data-baseweb="tab-list"] button {
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    color: #7a7872 !important;
+    background-color: transparent !important;
+    border: none !important;
+    padding: 10px 20px !important;
+    transition: all 0.2s ease !important;
+}
+
+/* Hover and active states */
+div[data-baseweb="tab-list"] button:hover {
+    color: #1a4329 !important;
+}
+div[data-baseweb="tab-list"] button[aria-selected="true"] {
+    color: #1a4329 !important;
+    border-bottom: 3px solid #1a4329 !important;
 }
 
 /* Sync feed styling */
@@ -213,27 +242,44 @@ def main():
     else:
         df_filtered = df.copy()
 
-    # 3. KPI SUMMARY CARDS
-    render_kpi_cards(df_filtered)
+    # 3. TAB NAVIGATION
+    tab1, tab2, tab3 = st.tabs(["🏟️ Market Overview", "🔍 Stock Explorer", "⚙️ Pipeline Monitor"])
     
-    # 4. CHART SECTION (Sector returns over time)
-    render_sector_growth_chart(df_filtered)
-    
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    
-    # 5. SECTOR-SPECIFIC TOP PERFORMERS GRID
-    st.markdown("---")
-    col_sec_title, col_sec_select = st.columns([6, 4])
-    with col_sec_title:
-        st.markdown("### Top Performing Industry Stocks")
-    with col_sec_select:
-        # Sector Filter (Selectbox styled cleanly)
-        sector_col = 'GICS_Sector' if 'GICS_Sector' in df_filtered.columns else 'GICS Sector'
-        sectors = sorted(df_filtered[sector_col].dropna().unique().tolist())
-        selected_sector = st.selectbox("Filter Industry Sector", sectors, label_visibility="collapsed")
+    with tab1:
+        # KPI SUMMARY CARDS
+        render_kpi_cards(df_filtered)
+        
+        # CHART SECTION (Sector returns over time)
+        render_sector_growth_chart(df_filtered)
+        
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        
+        # SECTOR-SPECIFIC TOP PERFORMERS GRID
+        st.markdown("---")
+        col_sec_title, col_sec_select = st.columns([6, 4])
+        with col_sec_title:
+            st.markdown("### Top Performing Industry Stocks")
+        with col_sec_select:
+            # Sector Filter (Selectbox styled cleanly)
+            sector_col = 'GICS_Sector' if 'GICS_Sector' in df_filtered.columns else 'GICS Sector'
+            sectors = sorted(df_filtered[sector_col].dropna().unique().tolist())
+            selected_sector = st.selectbox("Filter Industry Sector", sectors, label_visibility="collapsed")
 
-    # Render top stock cards for the selected sector
-    render_top_performers(df_filtered, selected_sector)
+        # Render top stock cards for the selected sector
+        render_top_performers(df_filtered, selected_sector)
+
+    with tab2:
+        st.markdown("### 🔍 Historical Stock Explorer")
+        st.markdown("Select an equity ticker below to examine daily price trends, trading volumes, and analytical indicators.")
+        
+        # Select symbol
+        symbols = sorted(df_filtered['Symbol'].dropna().unique().tolist())
+        selected_symbol = st.selectbox("Select Ticker Symbol", symbols, label_visibility="visible")
+        
+        render_ticker_explorer(df_filtered, selected_symbol)
+
+    with tab3:
+        render_pipeline_monitor()
 
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     st.caption("AIIMIN Personal OS • Powered by Python, yfinance, Boto3, and Streamlit.")
