@@ -4,7 +4,7 @@ pandas==2.2.1
 pandera==0.18.3
 pyarrow==15.0.2
 requests==2.31.0
-beautifulsoup4==4.12.3
+beautifulsoup4==4.15.0
 yfinance>=0.2.407
 awswrangler==3.7.0
 streamlit==1.32.2
