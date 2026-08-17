@@ -67,29 +67,3 @@ def test_engineer_features(sample_ohlcv, sample_sp500):
 
 def test_engineer_features_empty():
     assert engineer_features(pd.DataFrame()).empty
-
-
-def test_engineer_features_rsi_and_ema():
-    """Verify EMA and RSI calculations satisfy mathematical bounds."""
-    from src.transform import engineer_features
-    import pandas as pd
-    import numpy as np
-
-    dates = pd.date_range("2026-01-01", periods=30, freq="B")
-    prices = np.linspace(100, 150, 30)
-    mock_df = pd.DataFrame({
-        "Symbol": ["TEST"] * 30,
-        "Exchange": ["SP500"] * 30,
-        "Date": dates,
-        "Close": prices,
-        "Volume": [1000] * 30,
-        "GICS_Sector": ["Tech"] * 30
-    })
-
-    result = engineer_features(mock_df)
-    assert "EMA_12" in result.columns
-    assert "EMA_26" in result.columns
-    assert "RSI_14" in result.columns
-    # RSI must strictly be between 0 and 100
-    valid_rsi = result["RSI_14"].dropna()
-    assert (valid_rsi >= 0).all() and (valid_rsi <= 100).all()

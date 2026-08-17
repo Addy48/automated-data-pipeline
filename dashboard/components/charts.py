@@ -292,20 +292,3 @@ def render_pipeline_monitor():
     
     # Render with Streamlit
     st.dataframe(table_df, use_container_width=True)
-
-def plot_rsi_indicator(df: pd.DataFrame, symbol: str) -> go.Figure:
-    """Plot 14-day RSI with overbought/oversold threshold bands."""
-    sub = df[df["Symbol"] == symbol].sort_values("Date")
-    fig = go.Figure()
-    if "RSI_14" in sub.columns:
-        fig.add_trace(go.Scatter(x=sub["Date"], y=sub["RSI_14"], name="RSI (14)", line=dict(color="#ff6b35", width=2)))
-        fig.add_hline(y=70, line_dash="dot", line_color="#ef4444", annotation_text="Overbought (70)")
-        fig.add_hline(y=30, line_dash="dot", line_color="#10b981", annotation_text="Oversold (30)")
-        fig.update_layout(
-            title=f"{symbol} 14-Day Relative Strength Index (RSI)",
-            yaxis=dict(range=[0, 100], title="RSI"),
-            xaxis_title="Date",
-            template="plotly_dark",
-            height=300
-        )
-    return fig

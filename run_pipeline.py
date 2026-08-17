@@ -1,11 +1,3 @@
-import argparse
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Multi-Exchange ETL Pipeline")
-    parser.add_argument("--dry-run", action="store_true", help="Execute without committing S3 loads")
-    parser.add_argument("--exchange", choices=["SP500", "NIFTY50", "ALL"], default="ALL", help="Target exchange")
-    return parser.parse_known_args()[0]
-
 import os
 import time
 import logging

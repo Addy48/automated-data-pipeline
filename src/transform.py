@@ -138,22 +138,8 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     cumulative_max = grouped['Close'].cummax()
     drawdown = (df['Close'] - cumulative_max) / cumulative_max
     df['Max_Drawdown'] = df.groupby('Symbol')['Close'].transform(lambda x: ((x - x.cummax()) / x.cummax()).rolling(window=252, min_periods=1).min())
-
-    # Exponential Moving Averages (EMA 12 and EMA 26)
-    df['EMA_12'] = grouped['Close'].transform(lambda x: x.ewm(span=12, adjust=False).mean())
-    df['EMA_26'] = grouped['Close'].transform(lambda x: x.ewm(span=26, adjust=False).mean())
-
-    # Relative Strength Index (RSI 14)
-    def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
-        delta = series.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period, min_periods=1).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period, min_periods=1).mean()
-        rs = gain / loss.replace(0, 1e-9)
-        return 100 - (100 / (1 + rs))
-
-    df['RSI_14'] = grouped['Close'].transform(lambda x: compute_rsi(x))
     
-    logger.info("Feature engineering complete. Added analytical columns and technical indicators.")
+    logger.info(f"Feature engineering complete. Added analytical columns.")
     return df
 
 
