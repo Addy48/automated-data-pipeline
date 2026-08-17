@@ -7,6 +7,6 @@ requests==2.31.0
 beautifulsoup4==4.12.3
 lxml==5.1.0
 yfinance>=0.2.407
-awswrangler==3.7.0
+awswrangler==3.16.1
 streamlit==1.32.2
 plotly==5.20.0
