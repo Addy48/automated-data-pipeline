@@ -9,7 +9,14 @@ def test_get_sp500_tickers_wikipedia_success():
     # Mocking requests.get to simulate successful Wikipedia scrape
     class MockResponse:
         def __init__(self):
-            self.text = "<table><tr><th>Symbol</th><th>Security</th><th>GICS Sector</th></tr><tr><td>AAPL</td><td>Apple Inc.</td><td>Information Technology</td></tr><tr><td>BRK.B</td><td>Berkshire</td><td>Financials</td></tr></table>"
+            self.text = (
+                "<html><body><table>"
+                "<thead><tr><th>Symbol</th><th>Security</th><th>GICS Sector</th></tr></thead>"
+                "<tbody>"
+                "<tr><td>AAPL</td><td>Apple Inc.</td><td>Information Technology</td></tr>"
+                "<tr><td>BRK.B</td><td>Berkshire</td><td>Financials</td></tr>"
+                "</tbody></table></body></html>"
+            )
             self.status_code = 200
 
         def raise_for_status(self):

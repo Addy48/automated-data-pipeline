@@ -96,7 +96,9 @@ def get_sp500_tickers(
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
 
-        tables = pd.read_html(response.text)
+        from io import StringIO
+
+        tables = pd.read_html(StringIO(response.text))
         df = tables[0]
 
         # Standardize columns to match downstream schemas
