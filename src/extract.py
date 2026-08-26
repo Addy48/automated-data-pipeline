@@ -1,12 +1,29 @@
 import logging
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 import yfinance as yf
 from typing import Optional, List
 from pathlib import Path
 
 logger = logging.getLogger("market_pipeline")
+
+def get_resilient_session(retries: int = 3, backoff: float = 1.0) -> requests.Session:
+    """Create a requests session with automatic exponential backoff."""
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=retries,
+        backoff_factor=backoff,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS"]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
 
 
 def get_nifty50_tickers(
@@ -27,7 +44,8 @@ def get_nifty50_tickers(
     }
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        session = get_resilient_session()
+        response = session.get(url, headers=headers, timeout=10)
         response.raise_for_status()
 
         # Read the second table on the Nifty 50 page (the first is usually the index info, the second is constituents)
@@ -93,7 +111,8 @@ def get_sp500_tickers(
     }
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        session = get_resilient_session()
+        response = session.get(url, headers=headers, timeout=10)
         response.raise_for_status()
 
         from io import StringIO
