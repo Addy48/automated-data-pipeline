@@ -78,3 +78,12 @@ def test_fetch_ohlcv_exception():
         with pytest.raises(Exception) as excinfo:
             fetch_ohlcv(["AAPL"])
         assert "API limit" in str(excinfo.value)
+
+
+def test_resilient_session_retry_configuration():
+    """Verify HTTP retry adapter is properly mounted on the extraction session."""
+    from src.extract import get_resilient_session
+    session = get_resilient_session(retries=4, backoff=0.5)
+    https_adapter = session.adapters.get("https://")
+    assert https_adapter is not None
+    assert https_adapter.max_retries.total == 4
