@@ -44,8 +44,7 @@ def get_nifty50_tickers(
     }
 
     try:
-        session = get_resilient_session()
-        response = session.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
 
         # Read the second table on the Nifty 50 page (the first is usually the index info, the second is constituents)
@@ -111,8 +110,7 @@ def get_sp500_tickers(
     }
 
     try:
-        session = get_resilient_session()
-        response = session.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
 
         from io import StringIO
