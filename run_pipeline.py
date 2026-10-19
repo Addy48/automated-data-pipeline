@@ -3,6 +3,7 @@
 Exit code is 0 only when every stage finished and, if uploads were requested,
 every S3 upload succeeded. Run ``python run_pipeline.py --help`` for options.
 """
+
 import argparse
 import json
 import logging
@@ -16,7 +17,13 @@ import pandas as pd
 
 from src.config import Settings, load_config
 from src.extract import fetch_ohlcv, get_nifty50_tickers, get_sp500_tickers
-from src.load import save_local, upload_bronze, upload_gold, upload_metrics, upload_silver
+from src.load import (
+    save_local,
+    upload_bronze,
+    upload_gold,
+    upload_metrics,
+    upload_silver,
+)
 from src.transform import (
     clean_data,
     engineer_features,
@@ -25,7 +32,9 @@ from src.transform import (
     validate_raw,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("market_pipeline")
 
 EXCHANGES = ("SP500", "NIFTY50", "ALL")
@@ -33,9 +42,18 @@ EXCHANGES = ("SP500", "NIFTY50", "ALL")
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Multi-Exchange ETL Pipeline")
-    parser.add_argument("--dry-run", action="store_true", help="Run every stage but never touch S3")
-    parser.add_argument("--exchange", choices=EXCHANGES, default="ALL", help="Target exchange (default: ALL)")
-    parser.add_argument("--period", default="1y", help="yfinance period to download (default: 1y)")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Run every stage but never touch S3"
+    )
+    parser.add_argument(
+        "--exchange",
+        choices=EXCHANGES,
+        default="ALL",
+        help="Target exchange (default: ALL)",
+    )
+    parser.add_argument(
+        "--period", default="1y", help="yfinance period to download (default: 1y)"
+    )
     parser.add_argument(
         "--require-s3",
         action="store_true",
@@ -59,7 +77,9 @@ def _tickers(exchange: str) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
-def run(args: argparse.Namespace, settings: Optional[Settings] = None) -> Dict[str, Any]:
+def run(
+    args: argparse.Namespace, settings: Optional[Settings] = None
+) -> Dict[str, Any]:
     """Execute the pipeline and return its metrics (``status`` is SUCCESS or FAILURE)."""
     settings = settings or load_config()
     start = time.time()
@@ -86,7 +106,9 @@ def run(args: argparse.Namespace, settings: Optional[Settings] = None) -> Dict[s
     if not args.dry_run and not settings.can_upload:
         msg = "S3 is not configured (need S3_BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)"
         if args.require_s3:
-            metrics.update(status="FAILURE", end_time=_now(), duration_seconds=time.time() - start)
+            metrics.update(
+                status="FAILURE", end_time=_now(), duration_seconds=time.time() - start
+            )
             metrics["errors"].append(msg)
             logger.error(msg)
             return metrics
@@ -107,7 +129,9 @@ def run(args: argparse.Namespace, settings: Optional[Settings] = None) -> Dict[s
         metrics["records_extracted"] = len(raw_ohlcv)
         if raw_ohlcv.empty:
             raise ValueError("No OHLCV data extracted.")
-        raw_merged = flatten_and_merge(raw_ohlcv, tickers_df[["Symbol", "GICS Sector", "Security", "Exchange"]])
+        raw_merged = flatten_and_merge(
+            raw_ohlcv, tickers_df[["Symbol", "GICS Sector", "Security", "Exchange"]]
+        )
 
         logger.info("--- PHASE 2: BRONZE ---")
         bronze_df, failed = validate_raw(raw_merged)
@@ -135,14 +159,20 @@ def run(args: argparse.Namespace, settings: Optional[Settings] = None) -> Dict[s
             save_local(gold_df, "analytics", run_id, csv=True)
         # Latest copy read by the dashboard
         os.makedirs("data", exist_ok=True)
-        gold_df.to_parquet("data/sector_growth_data.parquet", engine="pyarrow", index=False)
+        gold_df.to_parquet(
+            "data/sector_growth_data.parquet", engine="pyarrow", index=False
+        )
         gold_df.to_csv("data/sector_growth_data.csv", index=False)
 
         if metrics["upload_failures"]:
-            raise RuntimeError("S3 upload failed for: " + ", ".join(metrics["upload_failures"]))
+            raise RuntimeError(
+                "S3 upload failed for: " + ", ".join(metrics["upload_failures"])
+            )
         metrics["status"] = "SUCCESS"
         logger.info("Pipeline execution completed successfully.")
-    except Exception as exc:  # noqa: BLE001 - recorded in metrics and reflected in the exit code
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - recorded in metrics and reflected in the exit code
         metrics["status"] = "FAILURE"
         metrics["errors"].append(str(exc))
         logger.error("Pipeline failed: %s", exc)

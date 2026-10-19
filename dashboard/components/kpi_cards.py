@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 def render_kpi_cards(df):
     """Render top-level KPI cards styled like The Arena."""
     if df.empty:
@@ -7,9 +8,15 @@ def render_kpi_cards(df):
         return
 
     total_records = len(df)
-    unique_symbols = df['Symbol'].nunique() if 'Symbol' in df.columns else df['Ticker'].nunique()
-    unique_sectors = df['GICS_Sector'].nunique() if 'GICS_Sector' in df.columns else df['GICS Sector'].nunique()
-    
+    unique_symbols = (
+        df["Symbol"].nunique() if "Symbol" in df.columns else df["Ticker"].nunique()
+    )
+    unique_sectors = (
+        df["GICS_Sector"].nunique()
+        if "GICS_Sector" in df.columns
+        else df["GICS Sector"].nunique()
+    )
+
     # Custom HTML for beautiful, premium KPI cards
     html = f"""
     <div style="display: flex; gap: 20px; margin-bottom: 25px; flex-wrap: wrap;">

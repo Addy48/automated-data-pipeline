@@ -7,20 +7,28 @@ import subprocess
 # Add the parent directory to sys.path so we can import components
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from components.kpi_cards import render_kpi_cards
-from components.charts import render_sector_growth_chart, render_top_performers, render_ticker_explorer, render_pipeline_monitor
+from components.kpi_cards import render_kpi_cards  # noqa: E402
+from components.charts import (  # noqa: E402
+    render_sector_growth_chart,
+    render_top_performers,
+    render_ticker_explorer,
+    render_pipeline_monitor,
+)
 
 # Define the local data path
-DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'sector_growth_data.parquet')
+DATA_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data",
+    "sector_growth_data.parquet",
+)
 
 st.set_page_config(
-    page_title="AIIMIN Market Intelligence | The Arena.",
-    page_icon="📈",
-    layout="wide"
+    page_title="AIIMIN Market Intelligence | The Arena.", page_icon="📈", layout="wide"
 )
 
 # Custom premium CSS styling matching 'The Arena'
-st.markdown("""
+st.markdown(
+    """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap');
 
@@ -186,7 +194,10 @@ div[data-baseweb="tab-list"] button[aria-selected="true"] {
     50% { opacity: 0; }
 }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
+
 
 @st.cache_data
 def load_data():
@@ -194,66 +205,90 @@ def load_data():
         return pd.read_parquet(DATA_PATH)
     else:
         # Fallback to CSV if parquet doesn't exist
-        csv_path = DATA_PATH.replace('.parquet', '.csv')
+        csv_path = DATA_PATH.replace(".parquet", ".csv")
         if os.path.exists(csv_path):
             return pd.read_csv(csv_path)
         return pd.DataFrame()
+
 
 def main():
     # 1. HEADER ROW (Title & Actions)
     col_left, col_right = st.columns([7, 3])
     with col_left:
-        st.markdown('<div class="arena-tag">AIIMIN MARKET INTELLIGENCE</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="arena-tag">AIIMIN MARKET INTELLIGENCE</div>',
+            unsafe_allow_html=True,
+        )
         st.markdown('<div class="arena-title">The Arena.</div>', unsafe_allow_html=True)
     with col_right:
-        st.markdown('<div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 15px;">', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 15px;">',
+            unsafe_allow_html=True,
+        )
         # Render a Live Status Tag
-        st.markdown('<div class="live-status">Live Market Feed</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="live-status">Live Market Feed</div>', unsafe_allow_html=True
+        )
         # Render Sync Scores Button
         if st.button("🔄 Sync Markets", key="sync_btn"):
-            with st.spinner("Executing ETL Pipeline (Scraping Wikipedia + yfinance)..."):
+            with st.spinner(
+                "Executing ETL Pipeline (Scraping Wikipedia + yfinance)..."
+            ):
                 try:
                     # Execute the ETL pipeline
-                    result = subprocess.run([sys.executable, "run_pipeline.py"], capture_output=True, text=True, check=True)
-                    st.cache_data.clear() # Clear cache so new data is loaded
+                    subprocess.run(
+                        [sys.executable, "run_pipeline.py"],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+                    st.cache_data.clear()  # Clear cache so new data is loaded
                     st.success("ETL Pipeline completed successfully! Rerunning...")
                     st.rerun()
                 except Exception as e:
                     st.error(f"ETL pipeline run failed: {e}")
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     df = load_data()
-    
+
     if df.empty:
-        st.warning("No market data found! Please click the '🔄 Sync Markets' button on the top right to execute the ETL pipeline and pull latest exchange data.")
+        st.warning(
+            "No market data found! Please click the '🔄 Sync Markets' button on the top right to execute the ETL pipeline and pull latest exchange data."
+        )
         return
-        
+
     # 2. FILTER ROW (Exchange Selector styled as horizontal radio pills)
     exchanges = ["🌐 All Markets"]
-    if 'Exchange' in df.columns:
-        exchanges.extend(sorted(df['Exchange'].dropna().unique().tolist()))
-        
-    selected_exchange_opt = st.radio("Exchange", exchanges, label_visibility="collapsed")
-    selected_exchange = None if selected_exchange_opt == "🌐 All Markets" else selected_exchange_opt
+    if "Exchange" in df.columns:
+        exchanges.extend(sorted(df["Exchange"].dropna().unique().tolist()))
+
+    selected_exchange_opt = st.radio(
+        "Exchange", exchanges, label_visibility="collapsed"
+    )
+    selected_exchange = (
+        None if selected_exchange_opt == "🌐 All Markets" else selected_exchange_opt
+    )
 
     # Filter df by exchange if necessary
-    if selected_exchange and 'Exchange' in df.columns:
-        df_filtered = df[df['Exchange'] == selected_exchange]
+    if selected_exchange and "Exchange" in df.columns:
+        df_filtered = df[df["Exchange"] == selected_exchange]
     else:
         df_filtered = df.copy()
 
     # 3. TAB NAVIGATION
-    tab1, tab2, tab3 = st.tabs(["🏟️ Market Overview", "🔍 Stock Explorer", "⚙️ Pipeline Monitor"])
-    
+    tab1, tab2, tab3 = st.tabs(
+        ["🏟️ Market Overview", "🔍 Stock Explorer", "⚙️ Pipeline Monitor"]
+    )
+
     with tab1:
         # KPI SUMMARY CARDS
         render_kpi_cards(df_filtered)
-        
+
         # CHART SECTION (Sector returns over time)
         render_sector_growth_chart(df_filtered)
-        
+
         st.markdown("<br><br>", unsafe_allow_html=True)
-        
+
         # SECTOR-SPECIFIC TOP PERFORMERS GRID
         st.markdown("---")
         col_sec_title, col_sec_select = st.columns([6, 4])
@@ -261,28 +296,39 @@ def main():
             st.markdown("### Top Performing Industry Stocks")
         with col_sec_select:
             # Sector Filter (Selectbox styled cleanly)
-            sector_col = 'GICS_Sector' if 'GICS_Sector' in df_filtered.columns else 'GICS Sector'
+            sector_col = (
+                "GICS_Sector" if "GICS_Sector" in df_filtered.columns else "GICS Sector"
+            )
             sectors = sorted(df_filtered[sector_col].dropna().unique().tolist())
-            selected_sector = st.selectbox("Filter Industry Sector", sectors, label_visibility="collapsed")
+            selected_sector = st.selectbox(
+                "Filter Industry Sector", sectors, label_visibility="collapsed"
+            )
 
         # Render top stock cards for the selected sector
         render_top_performers(df_filtered, selected_sector)
 
     with tab2:
         st.markdown("### 🔍 Historical Stock Explorer")
-        st.markdown("Select an equity ticker below to examine daily price trends, trading volumes, and analytical indicators.")
-        
+        st.markdown(
+            "Select an equity ticker below to examine daily price trends, trading volumes, and analytical indicators."
+        )
+
         # Select symbol
-        symbols = sorted(df_filtered['Symbol'].dropna().unique().tolist())
-        selected_symbol = st.selectbox("Select Ticker Symbol", symbols, label_visibility="visible")
-        
+        symbols = sorted(df_filtered["Symbol"].dropna().unique().tolist())
+        selected_symbol = st.selectbox(
+            "Select Ticker Symbol", symbols, label_visibility="visible"
+        )
+
         render_ticker_explorer(df_filtered, selected_symbol)
 
     with tab3:
         render_pipeline_monitor()
 
     st.markdown("<br><br><br>", unsafe_allow_html=True)
-    st.caption("AIIMIN Personal OS • Powered by Python, yfinance, Boto3, and Streamlit.")
+    st.caption(
+        "AIIMIN Personal OS • Powered by Python, yfinance, Boto3, and Streamlit."
+    )
+
 
 if __name__ == "__main__":
     main()

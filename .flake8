@@ -1,0 +1,8 @@
+[flake8]
+max-line-length = 120
+exclude = .git,terraform,.venv,__pycache__
+# black formats the code; these two rules disagree with it
+extend-ignore = E203,W503
+per-file-ignores =
+    # the dashboard embeds long CSS and HTML strings
+    dashboard/*:E501,W293
