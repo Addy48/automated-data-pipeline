@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from src.extract import get_sp500_tickers, fetch_ohlcv
+from src.extract import get_nifty50_tickers, get_sp500_tickers, fetch_ohlcv
 import yfinance as yf
 from unittest.mock import patch
 
@@ -87,3 +87,29 @@ def test_resilient_session_retry_configuration():
     https_adapter = session.adapters.get("https://")
     assert https_adapter is not None
     assert https_adapter.max_retries.total == 4
+
+
+def test_get_nifty50_tickers_drops_blank_rows_and_adds_suffix():
+    class MockResponse:
+        text = (
+            "<html><body><table>"
+            "<thead><tr><th>Company Name</th><th>Sector</th><th>Symbol</th></tr></thead>"
+            "<tbody>"
+            "<tr><td>Infosys</td><td>IT</td><td>INFY</td></tr>"
+            "<tr><td>Footnote row</td><td>-</td><td></td></tr>"
+            "</tbody></table></body></html>"
+        )
+
+        def raise_for_status(self):
+            pass
+
+    with patch("requests.get", return_value=MockResponse()):
+        df = get_nifty50_tickers(fallback_path="nonexistent.csv")
+    assert df["Symbol"].tolist() == ["INFY.NS"]
+    assert set(df.columns) == {"Symbol", "GICS Sector", "Security", "Exchange"}
+
+
+def test_get_nifty50_tickers_fallback_fixture():
+    with patch("requests.get", side_effect=Exception("Network Error")):
+        df = get_nifty50_tickers(fallback_path="tests/fixtures/mock_nifty50.csv")
+    assert len(df) == 5 and df["Symbol"].str.endswith(".NS").all()

@@ -1,4 +1,6 @@
 import logging
+from io import StringIO
+
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
@@ -48,7 +50,7 @@ def get_nifty50_tickers(
         response.raise_for_status()
 
         # Read the second table on the Nifty 50 page (the first is usually the index info, the second is constituents)
-        tables = pd.read_html(response.text)
+        tables = pd.read_html(StringIO(response.text))
         # Often the constituents are in the 3rd table (index 2), let's find the one with 'Symbol'
         df = None
         for table in tables:
@@ -59,8 +61,13 @@ def get_nifty50_tickers(
         if df is None:
             raise ValueError("Could not find a table with 'Symbol' column on Wikipedia page.")
 
+        # Drop blank or footnote rows before building tickers (a NaN would become "nan.NS")
+        df = df[df["Symbol"].notna()].copy()
+        df["Symbol"] = df["Symbol"].astype(str).str.strip()
+        df = df[df["Symbol"].ne("") & df["Symbol"].str.lower().ne("nan")]
+
         # Wikipedia symbols don't have .NS suffix required by yfinance for Indian stocks
-        df["Symbol"] = df["Symbol"].astype(str) + ".NS"
+        df["Symbol"] = df["Symbol"] + ".NS"
         
         # Rename 'Sector' to 'GICS Sector' to match downstream validation schemas
         if "Sector" in df.columns:
@@ -112,8 +119,6 @@ def get_sp500_tickers(
     try:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
-
-        from io import StringIO
 
         tables = pd.read_html(StringIO(response.text))
         df = tables[0]
