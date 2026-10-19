@@ -1,5 +1,6 @@
-import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
 
 def render_sector_growth_chart(df):
     """Render a line chart of sector cumulative returns over time."""
@@ -25,7 +26,7 @@ def render_sector_growth_chart(df):
     # Fill NaN values to ensure a continuous line chart
     chart_data = chart_data.ffill().bfill().fillna(0.0)
     
-    st.line_chart(chart_data * 100, height=400, use_container_width=True)
+    st.line_chart(chart_data * 100, height=400, width="stretch")
 
 def render_top_performers(df, selected_sector):
     """Render top performing stocks as beautiful cards styled like The Arena."""
@@ -191,7 +192,7 @@ def render_ticker_explorer(df, selected_symbol):
     chart_data['Date'] = pd.to_datetime(chart_data['Date'])
     chart_data = chart_data.set_index('Date')
     
-    st.line_chart(chart_data, height=350, use_container_width=True)
+    st.line_chart(chart_data, height=350, width="stretch")
 
     # Plot Volume Chart
     st.markdown("#### Trading Volume History")
@@ -200,7 +201,12 @@ def render_ticker_explorer(df, selected_symbol):
     volume_data['Date'] = pd.to_datetime(volume_data['Date'])
     volume_data = volume_data.set_index('Date')
     
-    st.bar_chart(volume_data, height=180, use_container_width=True)
+    st.bar_chart(volume_data, height=180, width="stretch")
+
+    # Plot momentum (RSI) when the gold layer carries it
+    if "RSI_14" in ticker_df.columns:
+        st.markdown("#### Momentum (RSI 14)")
+        st.plotly_chart(plot_rsi_indicator(ticker_df, selected_symbol), width="stretch")
 
 
 def render_pipeline_monitor():
@@ -222,7 +228,9 @@ def render_pipeline_monitor():
         try:
             with open(f_path, 'r') as f:
                 run_data = json.load(f)
-                runs.append(run_data)
+                # Skip files that are not complete pipeline run records
+                if isinstance(run_data, dict) and {"start_time", "status"} <= run_data.keys():
+                    runs.append(run_data)
         except Exception:
             pass
             
@@ -291,7 +299,7 @@ def render_pipeline_monitor():
         table_df['Duration (s)'] = table_df['Duration (s)'].round(2)
     
     # Render with Streamlit
-    st.dataframe(table_df, use_container_width=True)
+    st.dataframe(table_df, width="stretch")
 
 def plot_rsi_indicator(df: pd.DataFrame, symbol: str) -> go.Figure:
     """Plot 14-day RSI with overbought/oversold threshold bands."""
