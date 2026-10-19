@@ -15,11 +15,11 @@ Your entire codebase lives at: `https://github.com/Addy48/automated-data-pipelin
 
 ### B. AWS Cloud (The Storage & Compute Engine)
 Go to [aws.amazon.com](https://aws.amazon.com) and log into your console. Search for the following services:
-- **Amazon S3**: Search for "S3". You will see a bucket named `sp500-pipeline-aaditya-2026-xyz` (or your customized bucket name). Click it. Inside, you will see folders for `raw/` (Bronze), `processed/` (Silver), and `analytics/` (Gold). This is where your actual Parquet files are securely saved after each run.
+- **Amazon S3**: Search for "S3". You will see a bucket named the bucket named in your `S3_BUCKET_NAME` setting. Click it. Inside, you will see folders for `raw/` (Bronze), `processed/` (Silver), and `analytics/` (Gold). This is where your actual Parquet files are securely saved after each run.
 - **Amazon Athena**: Search for "Athena". This is the query engine. In the Query Editor, select the database `sp500_analytics`, where you can query the unified gold layer containing both US and Indian stock metrics.
 
 ### C. Your Local Machine (The Visualization Engine)
-Your Mac terminal is where you launch the beautiful, interactive Analytics Dashboard ("The Arena"). The dashboard connects to AWS, pulls the insights, and displays them in your web browser.
+Your Mac terminal is where you launch the beautiful, interactive Analytics Dashboard ("The Arena"). The dashboard reads the latest gold-layer file that the pipeline writes to `data/sector_growth_data.parquet` (run `python run_pipeline.py` first, or click **Sync Markets**) and displays it in your web browser. Athena is for ad-hoc SQL on the same data; the dashboard does not query it.
 
 ---
 
@@ -30,11 +30,11 @@ You don't need to touch AWS or GitHub for this.
 1. Open your Mac Terminal.
 2. Navigate to the project folder:
    ```bash
-   cd /Users/aaditya/.gemini/antigravity/automated-data-pipeline
+   cd automated-data-pipeline
    ```
 3. Activate the virtual environment:
    ```bash
-   source venv/bin/activate
+   source .venv/bin/activate
    ```
 4. Run the Streamlit Dashboard:
    ```bash

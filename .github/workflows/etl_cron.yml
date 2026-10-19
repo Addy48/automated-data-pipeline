@@ -5,10 +5,24 @@ on:
     # Run twice a day at 12:30 UTC (post-IST close) and 21:30 UTC (post-EST close)
     - cron: '30 12,21 * * *'  # Runs at 12:30 UTC (18:00 IST) daily
   workflow_dispatch:      # Allows manual trigger
+    inputs:
+      exchange:
+        description: "Exchange to load"
+        type: choice
+        options: [ALL, SP500, NIFTY50]
+        default: ALL
+
+permissions:
+  contents: read
+
+concurrency:
+  group: etl
+  cancel-in-progress: false
 
 jobs:
   run-etl:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
     - name: Checkout repository
@@ -34,5 +48,16 @@ jobs:
         ATHENA_DATABASE: ${{ secrets.ATHENA_DATABASE }}
         ATHENA_WORKGROUP: ${{ secrets.ATHENA_WORKGROUP }}
         ATHENA_OUTPUT_LOCATION: ${{ secrets.ATHENA_OUTPUT_LOCATION }}
+        EXCHANGE: ${{ inputs.exchange || 'ALL' }}
       run: |
-        python run_pipeline.py
+        # --require-s3 fails the job if S3 settings are missing; any failed stage or upload exits non-zero
+        python run_pipeline.py --require-s3 --exchange "$EXCHANGE"
+
+    - name: Upload run metrics
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: etl-metrics
+        path: logs/metrics_*.json
+        if-no-files-found: ignore
+        retention-days: 14

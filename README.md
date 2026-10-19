@@ -17,8 +17,8 @@ S&P 500 **and** Nifty 50 daily bars into an S3 medallion lake (bronze / silver /
 
 1. Pulls index constituents (Wikipedia) and daily OHLCV (`yfinance`) for **S&P 500** and **Nifty 50**.
 2. Validates with **Pandera**, writes partitioned **Parquet** through bronze → silver → gold on S3.
-3. Glue catalogs the lake; **Athena** serves SQL; Streamlit reads Athena for sector and KPI views.
-4. GitHub Actions runs after each market close: **12:30 UTC** (India) and **21:30 UTC** (US).
+3. Glue catalogs the lake and **Athena** serves SQL. The Streamlit dashboard reads the latest gold file the pipeline writes to `data/`.
+4. GitHub Actions runs after each market close: **12:30 UTC** (India) and **21:30 UTC** (US). The job fails if a stage or an S3 upload fails.
 
 ```mermaid
 flowchart LR
@@ -26,7 +26,8 @@ flowchart LR
   ETL --> S3[(S3 medallion)]
   S3 --> Glue[Glue Catalog]
   Glue --> Athena[Athena]
-  Athena --> Dash[Streamlit]
+  ETL --> Local[data/ latest gold]
+  Local --> Dash[Streamlit]
 ```
 
 ---
@@ -53,13 +54,17 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-Terraform and the live lake need AWS credentials. Do not commit `.env` or `terraform.tfvars`.
-
-Dashboard (after AWS is wired):
+Run the ETL locally (no AWS needed; writes `data/` and `logs/`):
 
 ```bash
-streamlit run dashboard/app.py
+python run_pipeline.py --dry-run --exchange NIFTY50     # one exchange, never touches S3
+python run_pipeline.py                                  # both exchanges; uploads to S3 when configured
+streamlit run dashboard/app.py                          # dashboard over data/sector_growth_data.parquet
 ```
+
+Options: `--exchange {SP500,NIFTY50,ALL}`, `--period 1y`, `--dry-run`, `--require-s3` (fail instead of falling back to local files). Exit code is `0` only when everything succeeded.
+
+Configuration comes from the environment (see `.env.example`): `S3_BUCKET_NAME`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. Terraform and the live lake need AWS credentials. Do not commit `.env` or `terraform.tfvars`.
 
 Ops detail: [USER_MANUAL.md](USER_MANUAL.md)
 
