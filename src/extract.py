@@ -5,12 +5,11 @@ import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from bs4 import BeautifulSoup
 import yfinance as yf
-from typing import Optional, List
-from pathlib import Path
+from typing import List
 
 logger = logging.getLogger("market_pipeline")
+
 
 def get_resilient_session(retries: int = 3, backoff: float = 1.0) -> requests.Session:
     """Create a requests session with automatic exponential backoff."""
@@ -19,13 +18,12 @@ def get_resilient_session(retries: int = 3, backoff: float = 1.0) -> requests.Se
         total=retries,
         backoff_factor=backoff,
         status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "OPTIONS"]
+        allowed_methods=["HEAD", "GET", "OPTIONS"],
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
     return session
-
 
 
 def get_nifty50_tickers(
@@ -57,9 +55,11 @@ def get_nifty50_tickers(
             if "Symbol" in table.columns:
                 df = table
                 break
-                
+
         if df is None:
-            raise ValueError("Could not find a table with 'Symbol' column on Wikipedia page.")
+            raise ValueError(
+                "Could not find a table with 'Symbol' column on Wikipedia page."
+            )
 
         # Drop blank or footnote rows before building tickers (a NaN would become "nan.NS")
         df = df[df["Symbol"].notna()].copy()
@@ -68,13 +68,13 @@ def get_nifty50_tickers(
 
         # Wikipedia symbols don't have .NS suffix required by yfinance for Indian stocks
         df["Symbol"] = df["Symbol"] + ".NS"
-        
+
         # Rename 'Sector' to 'GICS Sector' to match downstream validation schemas
         if "Sector" in df.columns:
             df = df.rename(columns={"Sector": "GICS Sector"})
         else:
             df["GICS Sector"] = "Unknown"
-            
+
         # Ensure Security column exists (some wikipedia versions use Company Name)
         if "Company Name" in df.columns:
             df = df.rename(columns={"Company Name": "Security"})
@@ -143,7 +143,9 @@ def get_sp500_tickers(
         )
         try:
             df = pd.read_csv(fallback_path)
-            logger.info(f"Successfully loaded {len(df)} S&P 500 tickers from fallback CSV.")
+            logger.info(
+                f"Successfully loaded {len(df)} S&P 500 tickers from fallback CSV."
+            )
             df["Exchange"] = "S&P 500"
             return df[["Symbol", "GICS Sector", "Security", "Exchange"]]
         except Exception as fallback_err:

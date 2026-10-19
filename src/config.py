@@ -41,7 +41,9 @@ def load_config(env: Optional[Mapping[str, str]] = None) -> Settings:
     return Settings(
         bucket=None if _is_placeholder(bucket) else bucket,
         region=env.get("AWS_REGION") or "us-east-1",
-        has_credentials=bool(env.get("AWS_ACCESS_KEY_ID") and env.get("AWS_SECRET_ACCESS_KEY")),
+        has_credentials=bool(
+            env.get("AWS_ACCESS_KEY_ID") and env.get("AWS_SECRET_ACCESS_KEY")
+        ),
     )
 
 

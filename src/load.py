@@ -2,16 +2,16 @@ import logging
 import pandas as pd
 import json
 import boto3
-import botocore
 from botocore.exceptions import ClientError
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import os
 
 logger = logging.getLogger("sp500_pipeline")
 
+
 def _get_boto3_client():
     """Internal factory to get boto3 S3 client."""
-    return boto3.client('s3', region_name=os.getenv("AWS_REGION") or None)
+    return boto3.client("s3", region_name=os.getenv("AWS_REGION") or None)
 
 
 def save_local(df: pd.DataFrame, layer: str, run_id: str, csv: bool = False) -> str:
@@ -22,6 +22,7 @@ def save_local(df: pd.DataFrame, layer: str, run_id: str, csv: bool = False) -> 
     if csv:
         df.to_csv(f"data/{layer}_{run_id}.csv", index=False)
     return path
+
 
 def _upload_to_s3(local_path: str, bucket: str, s3_key: str) -> bool:
     """Helper to upload a file to S3."""
@@ -37,15 +38,16 @@ def _upload_to_s3(local_path: str, bucket: str, s3_key: str) -> bool:
         logger.critical(f"Unexpected error during S3 upload of {local_path}: {e}")
         return False
 
+
 def upload_bronze(df: pd.DataFrame, bucket: str, run_id: str) -> bool:
     """Save raw data to local parquet and upload to Bronze S3 layer."""
     if df.empty:
         logger.warning("Empty DataFrame passed to upload_bronze.")
         return False
-        
+
     local_path = f"data/raw_{run_id}.parquet"
     s3_key = f"raw/run_id={run_id}/data.parquet"
-    
+
     try:
         save_local(df, "raw", run_id)
         return _upload_to_s3(local_path, bucket, s3_key)
@@ -53,15 +55,16 @@ def upload_bronze(df: pd.DataFrame, bucket: str, run_id: str) -> bool:
         logger.error(f"Failed to write bronze parquet: {e}")
         return False
 
+
 def upload_silver(df: pd.DataFrame, bucket: str, run_id: str) -> bool:
     """Save cleaned/transformed data to local parquet and upload to Silver S3 layer."""
     if df.empty:
         logger.warning("Empty DataFrame passed to upload_silver.")
         return False
-        
+
     local_path = f"data/processed_{run_id}.parquet"
     s3_key = f"processed/run_id={run_id}/data.parquet"
-    
+
     try:
         save_local(df, "processed", run_id)
         return _upload_to_s3(local_path, bucket, s3_key)
@@ -69,17 +72,18 @@ def upload_silver(df: pd.DataFrame, bucket: str, run_id: str) -> bool:
         logger.error(f"Failed to write silver parquet: {e}")
         return False
 
+
 def upload_gold(df: pd.DataFrame, bucket: str, run_id: str) -> bool:
     """Save analytics-ready data to local parquet & CSV, and upload to Gold S3 layer."""
     if df.empty:
         logger.warning("Empty DataFrame passed to upload_gold.")
         return False
-        
+
     local_pq_path = f"data/analytics_{run_id}.parquet"
     local_csv_path = f"data/analytics_{run_id}.csv"
     s3_pq_key = f"analytics/run_id={run_id}/data.parquet"
     s3_csv_key = f"analytics/run_id={run_id}/data.csv"
-    
+
     try:
         save_local(df, "analytics", run_id, csv=True)
 
@@ -90,17 +94,18 @@ def upload_gold(df: pd.DataFrame, bucket: str, run_id: str) -> bool:
         logger.error(f"Failed to write gold datasets: {e}")
         return False
 
+
 def upload_metrics(metrics: Dict[str, Any], bucket: str, run_id: str) -> bool:
     """Save pipeline execution metrics to local JSON and upload to Observability S3 layer."""
     if not metrics:
         return False
-        
+
     local_path = f"logs/metrics_{run_id}.json"
     s3_key = f"observability/run_id={run_id}/metrics.json"
-    
+
     try:
         os.makedirs("logs", exist_ok=True)
-        with open(local_path, 'w') as f:
+        with open(local_path, "w") as f:
             json.dump(metrics, f, indent=4)
         return _upload_to_s3(local_path, bucket, s3_key)
     except Exception as e:

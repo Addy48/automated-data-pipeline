@@ -1,4 +1,5 @@
 """Smoke test: the Streamlit dashboard imports and renders from a gold-layer parquet."""
+
 import sys
 from pathlib import Path
 
@@ -21,7 +22,9 @@ def gold_parquet():
     sp500["Exchange"] = "S&P 500"
     ohlcv = pd.read_parquet(FIXTURES / "mock_ohlcv.parquet")
     ohlcv["Date"] = pd.to_datetime(ohlcv["Date"])
-    merged = flatten_and_merge(ohlcv, sp500[["Symbol", "GICS Sector", "Security", "Exchange"]])
+    merged = flatten_and_merge(
+        ohlcv, sp500[["Symbol", "GICS Sector", "Security", "Exchange"]]
+    )
     gold = engineer_features(clean_data(merged))
     existed = DATA.exists()
     backup = DATA.read_bytes() if existed else None
@@ -39,7 +42,9 @@ def gold_parquet():
 def test_dashboard_renders_without_exceptions(gold_parquet, monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "dashboard"))
     monkeypatch.syspath_prepend(str(ROOT))
-    for name in [m for m in sys.modules if m == "components" or m.startswith("components.")]:
+    for name in [
+        m for m in sys.modules if m == "components" or m.startswith("components.")
+    ]:
         del sys.modules[name]
     at = AppTest.from_file(str(ROOT / "dashboard" / "app.py"), default_timeout=60).run()
     assert not at.exception, [e.value for e in at.exception]

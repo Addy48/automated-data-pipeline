@@ -2,7 +2,13 @@ from src.config import load_config
 
 
 def test_bucket_read_from_s3_bucket_name():
-    cfg = load_config({"S3_BUCKET_NAME": "my-lake", "AWS_ACCESS_KEY_ID": "a", "AWS_SECRET_ACCESS_KEY": "b"})
+    cfg = load_config(
+        {
+            "S3_BUCKET_NAME": "my-lake",
+            "AWS_ACCESS_KEY_ID": "a",
+            "AWS_SECRET_ACCESS_KEY": "b",
+        }
+    )
     assert cfg.bucket == "my-lake"
     assert cfg.can_upload
 
@@ -12,7 +18,13 @@ def test_legacy_alias_still_accepted():
 
 
 def test_placeholder_bucket_counts_as_unset():
-    cfg = load_config({"S3_BUCKET_NAME": "your-bucket-name-here", "AWS_ACCESS_KEY_ID": "a", "AWS_SECRET_ACCESS_KEY": "b"})
+    cfg = load_config(
+        {
+            "S3_BUCKET_NAME": "your-bucket-name-here",
+            "AWS_ACCESS_KEY_ID": "a",
+            "AWS_SECRET_ACCESS_KEY": "b",
+        }
+    )
     assert cfg.bucket is None
     assert not cfg.can_upload
 

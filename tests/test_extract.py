@@ -1,7 +1,6 @@
 import pytest
 import pandas as pd
 from src.extract import get_nifty50_tickers, get_sp500_tickers, fetch_ohlcv
-import yfinance as yf
 from unittest.mock import patch
 
 
@@ -83,6 +82,7 @@ def test_fetch_ohlcv_exception():
 def test_resilient_session_retry_configuration():
     """Verify HTTP retry adapter is properly mounted on the extraction session."""
     from src.extract import get_resilient_session
+
     session = get_resilient_session(retries=4, backoff=0.5)
     https_adapter = session.adapters.get("https://")
     assert https_adapter is not None
