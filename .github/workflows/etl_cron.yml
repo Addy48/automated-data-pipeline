@@ -26,10 +26,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up Python 3.11
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: '3.11'
         cache: 'pip'
@@ -62,7 +62,7 @@ jobs:
 
     - name: Upload run metrics
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: etl-metrics
         path: logs/metrics_*.json
@@ -71,7 +71,7 @@ jobs:
 
     - name: Upload gold file (local-only runs)
       if: ${{ vars.ETL_S3 != 'true' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: gold-latest
         path: data/sector_growth_data.parquet
