@@ -1,39 +1,76 @@
+"""Multi-exchange market data ETL: extract -> bronze -> silver -> gold.
+
+Exit code is 0 only when every stage finished and, if uploads were requested,
+every S3 upload succeeded. Run ``python run_pipeline.py --help`` for options.
+"""
 import argparse
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Multi-Exchange ETL Pipeline")
-    parser.add_argument("--dry-run", action="store_true", help="Execute without committing S3 loads")
-    parser.add_argument("--exchange", choices=["SP500", "NIFTY50", "ALL"], default="ALL", help="Target exchange")
-    return parser.parse_known_args()[0]
-
-import os
-import time
+import json
 import logging
-from datetime import datetime
-from typing import Dict, Any
+import os
+import sys
+import time
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from src.config import S3_PATHS
-from src.extract import get_nifty50_tickers, get_sp500_tickers, fetch_ohlcv
-from src.transform import validate_raw, clean_data, engineer_features, validate_analytics, flatten_and_merge
-from src.load import upload_bronze, upload_silver, upload_gold, upload_metrics
+import pandas as pd
 
-# Initialize logger
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+from src.config import Settings, load_config
+from src.extract import fetch_ohlcv, get_nifty50_tickers, get_sp500_tickers
+from src.load import save_local, upload_bronze, upload_gold, upload_metrics, upload_silver
+from src.transform import (
+    clean_data,
+    engineer_features,
+    flatten_and_merge,
+    validate_analytics,
+    validate_raw,
+)
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("market_pipeline")
 
-def main():
-    logger.info("=" * 50)
-    logger.info("Starting Automated Data Pipeline...")
-    logger.info("=" * 50)
-    
-    start_time = time.time()
-    run_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    
-    # Initialize metrics
+EXCHANGES = ("SP500", "NIFTY50", "ALL")
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Multi-Exchange ETL Pipeline")
+    parser.add_argument("--dry-run", action="store_true", help="Run every stage but never touch S3")
+    parser.add_argument("--exchange", choices=EXCHANGES, default="ALL", help="Target exchange (default: ALL)")
+    parser.add_argument("--period", default="1y", help="yfinance period to download (default: 1y)")
+    parser.add_argument(
+        "--require-s3",
+        action="store_true",
+        help="Fail if S3 settings are missing instead of falling back to local files (use in CI)",
+    )
+    return parser.parse_args(argv)
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _tickers(exchange: str) -> pd.DataFrame:
+    frames = []
+    if exchange in ("NIFTY50", "ALL"):
+        logger.info("Extracting Nifty 50 tickers...")
+        frames.append(get_nifty50_tickers())
+    if exchange in ("SP500", "ALL"):
+        logger.info("Extracting S&P 500 tickers...")
+        frames.append(get_sp500_tickers())
+    return pd.concat(frames, ignore_index=True)
+
+
+def run(args: argparse.Namespace, settings: Optional[Settings] = None) -> Dict[str, Any]:
+    """Execute the pipeline and return its metrics (``status`` is SUCCESS or FAILURE)."""
+    settings = settings or load_config()
+    start = time.time()
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     metrics: Dict[str, Any] = {
         "run_id": run_id,
         "status": "IN_PROGRESS",
-        "start_time": datetime.utcnow().isoformat(),
+        "exchange": args.exchange,
+        "dry_run": bool(args.dry_run),
+        "uploaded": False,
+        "start_time": _now(),
         "end_time": None,
         "duration_seconds": None,
         "records_extracted": 0,
@@ -41,110 +78,90 @@ def main():
         "records_silver": 0,
         "records_gold": 0,
         "failed_tickers": [],
-        "errors": []
+        "upload_failures": [],
+        "errors": [],
     }
-    
-    # Check if we should attempt AWS upload
-    aws_bucket = os.getenv("AWS_BUCKET_NAME", "your-bucket-name-here")
-    has_aws_creds = bool(os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY"))
-    if not has_aws_creds:
-        logger.warning("AWS Credentials not found in environment. Will save locally and simulate S3 upload.")
-    
+
+    upload = settings.can_upload and not args.dry_run
+    if not args.dry_run and not settings.can_upload:
+        msg = "S3 is not configured (need S3_BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)"
+        if args.require_s3:
+            metrics.update(status="FAILURE", end_time=_now(), duration_seconds=time.time() - start)
+            metrics["errors"].append(msg)
+            logger.error(msg)
+            return metrics
+        logger.warning("%s. Writing local files only.", msg)
+    metrics["uploaded"] = upload
+
+    def _upload(stage: str, ok: bool) -> None:
+        if not ok:
+            metrics["upload_failures"].append(stage)
+            logger.error("S3 upload failed for the %s layer", stage)
+
     try:
-        # 1. EXTRACT
-        logger.info("\n--- PHASE 1: EXTRACT ---")
-        import pandas as pd
-        
-        logger.info("Extracting Nifty 50 tickers...")
-        nifty_df = get_nifty50_tickers()
-        logger.info("Extracting S&P 500 tickers...")
-        sp500_df = get_sp500_tickers()
-        
-        tickers_df = pd.concat([nifty_df, sp500_df], ignore_index=True)
-        
+        logger.info("--- PHASE 1: EXTRACT ---")
+        tickers_df = _tickers(args.exchange)
         if tickers_df.empty:
-            raise ValueError("Failed to extract tickers from both sources.")
-            
-        tickers_list = tickers_df['Symbol'].tolist()
-        logger.info(f"Extracting OHLCV for {len(tickers_list)} combined tickers...")
-        
-        # In a real run, this fetches all. We take top combined for speed if not production
-        raw_ohlcv = fetch_ohlcv(tickers_list, period='1mo')
+            raise ValueError("No tickers extracted.")
+        raw_ohlcv = fetch_ohlcv(tickers_df["Symbol"].tolist(), period=args.period)
         metrics["records_extracted"] = len(raw_ohlcv)
-        
         if raw_ohlcv.empty:
             raise ValueError("No OHLCV data extracted.")
-            
-        # Join with metadata (Sector and Exchange)
-        raw_merged = flatten_and_merge(raw_ohlcv, tickers_df[['Symbol', 'GICS Sector', 'Exchange']])
-        
-        # 2. BRONZE GATE & LOAD
-        logger.info("\n--- PHASE 2: BRONZE GATE ---")
-        bronze_df, failed_tickers = validate_raw(raw_merged)
-        metrics["failed_tickers"] = failed_tickers
+        raw_merged = flatten_and_merge(raw_ohlcv, tickers_df[["Symbol", "GICS Sector", "Security", "Exchange"]])
+
+        logger.info("--- PHASE 2: BRONZE ---")
+        bronze_df, failed = validate_raw(raw_merged)
+        metrics["failed_tickers"] = failed
         metrics["records_bronze"] = len(bronze_df)
-        
-        logger.info("Loading to Bronze Layer...")
-        bronze_df.to_parquet("data/raw_test_run.parquet", engine="pyarrow", index=False)
-        if has_aws_creds:
-            upload_bronze(bronze_df, aws_bucket, run_id)
+        if upload:
+            _upload("bronze", upload_bronze(bronze_df, settings.bucket, run_id))
         else:
-            logger.info("Mocking Bronze S3 upload. Data saved locally in data/ folder.")
-            
-        # 3. SILVER (CLEANING) & LOAD
-        logger.info("\n--- PHASE 3: SILVER (CLEAN & TRANSFORM) ---")
+            save_local(bronze_df, "raw", run_id)
+
+        logger.info("--- PHASE 3: SILVER ---")
         silver_df = clean_data(bronze_df)
         metrics["records_silver"] = len(silver_df)
-        
-        logger.info("Loading to Silver Layer...")
-        silver_df.to_parquet("data/processed_test_run.parquet", engine="pyarrow", index=False)
-        if has_aws_creds:
-            upload_silver(silver_df, aws_bucket, run_id)
+        if upload:
+            _upload("silver", upload_silver(silver_df, settings.bucket, run_id))
         else:
-            logger.info("Mocking Silver S3 upload.")
-            
-        # 4. GOLD (FEATURE ENGINEERING) & GATE & LOAD
-        logger.info("\n--- PHASE 4: GOLD (ANALYTICS) ---")
-        gold_df = engineer_features(silver_df)
-        
-        logger.info("Validating Gold Schema...")
-        gold_df = validate_analytics(gold_df)
+            save_local(silver_df, "processed", run_id)
+
+        logger.info("--- PHASE 4: GOLD ---")
+        gold_df = validate_analytics(engineer_features(silver_df))
         metrics["records_gold"] = len(gold_df)
-        
-        logger.info("Loading to Gold Layer...")
-        gold_df.to_parquet("data/analytics_test_run.parquet", engine="pyarrow", index=False)
+        if upload:
+            _upload("gold", upload_gold(gold_df, settings.bucket, run_id))
+        else:
+            save_local(gold_df, "analytics", run_id, csv=True)
+        # Latest copy read by the dashboard
+        os.makedirs("data", exist_ok=True)
         gold_df.to_parquet("data/sector_growth_data.parquet", engine="pyarrow", index=False)
         gold_df.to_csv("data/sector_growth_data.csv", index=False)
-        if has_aws_creds:
-            upload_gold(gold_df, aws_bucket, run_id)
-        else:
-            logger.info("Mocking Gold S3 upload.")
-        
+
+        if metrics["upload_failures"]:
+            raise RuntimeError("S3 upload failed for: " + ", ".join(metrics["upload_failures"]))
         metrics["status"] = "SUCCESS"
-        logger.info("=" * 50)
         logger.info("Pipeline execution completed successfully.")
-        logger.info("=" * 50)
-        
-    except Exception as e:
+    except Exception as exc:  # noqa: BLE001 - recorded in metrics and reflected in the exit code
         metrics["status"] = "FAILURE"
-        metrics["errors"].append(str(e))
-        logger.error(f"Pipeline failed: {e}")
-        
+        metrics["errors"].append(str(exc))
+        logger.error("Pipeline failed: %s", exc)
     finally:
-        elapsed_time = time.time() - start_time
-        metrics["duration_seconds"] = elapsed_time
-        metrics["end_time"] = datetime.utcnow().isoformat()
-        
-        logger.info(f"Uploading metrics.json for run_id {run_id}...")
-        if has_aws_creds:
-            upload_metrics(metrics, aws_bucket, run_id)
-        else:
-            # save locally to logs/
-            import json
-            os.makedirs("logs", exist_ok=True)
-            with open(f"logs/metrics_{run_id}.json", "w") as f:
-                json.dump(metrics, f, indent=4)
-            logger.info("Mocking metrics S3 upload.")
+        metrics["duration_seconds"] = time.time() - start
+        metrics["end_time"] = _now()
+        os.makedirs("logs", exist_ok=True)
+        with open(f"logs/metrics_{run_id}.json", "w") as fh:
+            json.dump(metrics, fh, indent=4)
+        if upload:
+            if not upload_metrics(metrics, settings.bucket, run_id):
+                logger.error("Could not upload metrics.json to S3")
+    return metrics
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    metrics = run(parse_args(argv))
+    return 0 if metrics["status"] == "SUCCESS" else 1
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

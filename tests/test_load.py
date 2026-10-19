@@ -7,6 +7,12 @@ from moto import mock_aws
 from botocore.exceptions import ClientError
 from src.load import upload_bronze, upload_silver, upload_gold, upload_metrics, _get_boto3_client
 
+@pytest.fixture(autouse=True)
+def _isolated_cwd(tmp_path, monkeypatch):
+    """upload_* write local copies under data/ and logs/; keep them out of the repo."""
+    monkeypatch.chdir(tmp_path)
+
+
 @pytest.fixture
 def dummy_df():
     return pd.DataFrame({"A": [1, 2], "B": [3, 4]})

@@ -11,7 +11,17 @@ logger = logging.getLogger("sp500_pipeline")
 
 def _get_boto3_client():
     """Internal factory to get boto3 S3 client."""
-    return boto3.client('s3')
+    return boto3.client('s3', region_name=os.getenv("AWS_REGION") or None)
+
+
+def save_local(df: pd.DataFrame, layer: str, run_id: str, csv: bool = False) -> str:
+    """Write one layer to ``data/<layer>_<run_id>.parquet`` (and optionally CSV)."""
+    os.makedirs("data", exist_ok=True)
+    path = f"data/{layer}_{run_id}.parquet"
+    df.to_parquet(path, engine="pyarrow", index=False)
+    if csv:
+        df.to_csv(f"data/{layer}_{run_id}.csv", index=False)
+    return path
 
 def _upload_to_s3(local_path: str, bucket: str, s3_key: str) -> bool:
     """Helper to upload a file to S3."""
@@ -37,7 +47,7 @@ def upload_bronze(df: pd.DataFrame, bucket: str, run_id: str) -> bool:
     s3_key = f"raw/run_id={run_id}/data.parquet"
     
     try:
-        df.to_parquet(local_path, engine="pyarrow", index=False)
+        save_local(df, "raw", run_id)
         return _upload_to_s3(local_path, bucket, s3_key)
     except Exception as e:
         logger.error(f"Failed to write bronze parquet: {e}")
@@ -53,7 +63,7 @@ def upload_silver(df: pd.DataFrame, bucket: str, run_id: str) -> bool:
     s3_key = f"processed/run_id={run_id}/data.parquet"
     
     try:
-        df.to_parquet(local_path, engine="pyarrow", index=False)
+        save_local(df, "processed", run_id)
         return _upload_to_s3(local_path, bucket, s3_key)
     except Exception as e:
         logger.error(f"Failed to write silver parquet: {e}")
@@ -71,9 +81,8 @@ def upload_gold(df: pd.DataFrame, bucket: str, run_id: str) -> bool:
     s3_csv_key = f"analytics/run_id={run_id}/data.csv"
     
     try:
-        df.to_parquet(local_pq_path, engine="pyarrow", index=False)
-        df.to_csv(local_csv_path, index=False)
-        
+        save_local(df, "analytics", run_id, csv=True)
+
         pq_success = _upload_to_s3(local_pq_path, bucket, s3_pq_key)
         csv_success = _upload_to_s3(local_csv_path, bucket, s3_csv_key)
         return pq_success and csv_success
@@ -90,6 +99,7 @@ def upload_metrics(metrics: Dict[str, Any], bucket: str, run_id: str) -> bool:
     s3_key = f"observability/run_id={run_id}/metrics.json"
     
     try:
+        os.makedirs("logs", exist_ok=True)
         with open(local_path, 'w') as f:
             json.dump(metrics, f, indent=4)
         return _upload_to_s3(local_path, bucket, s3_key)
