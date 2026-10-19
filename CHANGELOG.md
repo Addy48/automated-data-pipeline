@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Dependencies updated together (boto3/botocore/awswrangler as one set, pandas 3, plotly 7, pytest 9); Dependabot now groups related updates.
-- Workflow: `--require-s3`, 30-minute timeout, no overlapping runs, read-only token, metrics uploaded as an artifact, manual run can pick the exchange.
+- Workflow: runs local-only until the repository variable `ETL_S3=true` is set, then `--require-s3`; 30-minute timeout, no overlapping runs, read-only token, metrics uploaded as an artifact, manual run can pick the exchange.
 - Default download period is one year, matching the dashboard and docs.
 - The dashboard shows the RSI chart that was already implemented but never rendered.
 

@@ -62,6 +62,8 @@ python run_pipeline.py                                  # both exchanges; upload
 streamlit run dashboard/app.py                          # dashboard over data/sector_growth_data.parquet
 ```
 
+**Turning S3 on in CI.** The scheduled workflow runs local-only (`--dry-run`) and keeps the gold file as a workflow artifact until the repository variable `ETL_S3` is set to `true`. Set it after the bucket from `terraform/` exists and the repository secrets (`S3_BUCKET_NAME`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) point at it; from then on every stage and upload must succeed or the run fails.
+
 Options: `--exchange {SP500,NIFTY50,ALL}`, `--period 1y`, `--dry-run`, `--require-s3` (fail instead of falling back to local files). Exit code is `0` only when everything succeeded.
 
 Configuration comes from the environment (see `.env.example`): `S3_BUCKET_NAME`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. Terraform and the live lake need AWS credentials. Do not commit `.env` or `terraform.tfvars`.

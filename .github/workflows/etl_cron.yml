@@ -49,9 +49,16 @@ jobs:
         ATHENA_WORKGROUP: ${{ secrets.ATHENA_WORKGROUP }}
         ATHENA_OUTPUT_LOCATION: ${{ secrets.ATHENA_OUTPUT_LOCATION }}
         EXCHANGE: ${{ inputs.exchange || 'ALL' }}
+        ETL_S3: ${{ vars.ETL_S3 }}
       run: |
-        # --require-s3 fails the job if S3 settings are missing; any failed stage or upload exits non-zero
-        python run_pipeline.py --require-s3 --exchange "$EXCHANGE"
+        # Set the repository variable ETL_S3=true once the S3 lake exists. Then every stage
+        # and upload must succeed (--require-s3). Without it the run is local-only (--dry-run)
+        # and the gold file is kept as a workflow artifact instead.
+        if [ "$ETL_S3" = "true" ]; then
+          python run_pipeline.py --require-s3 --exchange "$EXCHANGE"
+        else
+          python run_pipeline.py --dry-run --exchange "$EXCHANGE"
+        fi
 
     - name: Upload run metrics
       if: always()
@@ -61,3 +68,11 @@ jobs:
         path: logs/metrics_*.json
         if-no-files-found: ignore
         retention-days: 14
+
+    - name: Upload gold file (local-only runs)
+      if: ${{ vars.ETL_S3 != 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: gold-latest
+        path: data/sector_growth_data.parquet
+        retention-days: 7
